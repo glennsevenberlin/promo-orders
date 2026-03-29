@@ -565,8 +565,8 @@ textarea { resize: vertical; min-height: 72px; }
           <input type="text" id="nc-postcode">
         </div>
         <div class="field">
-          <label>Country</label>
-          <input type="text" id="nc-country" placeholder="Germany">
+          <label>Country <span style="color:var(--accent)">*</span></label>
+          <input type="text" id="nc-country" placeholder="e.g. Germany, France, USA…">
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:4px;">
@@ -598,8 +598,8 @@ textarea { resize: vertical; min-height: 72px; }
         <input type="text" id="addr-postcode">
       </div>
       <div class="field">
-        <label>Country</label>
-        <input type="text" id="addr-country">
+        <label>Country <span style="color:var(--accent)">*</span></label>
+        <input type="text" id="addr-country" placeholder="e.g. Germany, France, USA…" oninput="updateSubmitState()">
       </div>
     </div>
     <div class="field-row col2">
@@ -956,8 +956,10 @@ function updateSubmitState() {
     ? document.getElementById('personalName').value.trim().length > 0
     : selectedContact !== null;
 
-  const hasLines = orderLines.length > 0;
-  const ready    = hasContact && hasLines;
+  const hasLines   = orderLines.length > 0;
+  const hasCountry = orderType === 'personal'
+    || document.getElementById('addr-country').value.trim().length > 0;
+  const ready = hasContact && hasLines && hasCountry;
 
   btn.disabled = !ready;
 
@@ -967,6 +969,8 @@ function updateSubmitState() {
     summary.innerHTML = orderType === 'personal' ? 'Enter a recipient name' : 'Select a contact';
   } else if (!hasLines) {
     summary.innerHTML = 'Add at least one product';
+  } else if (!hasCountry) {
+    summary.innerHTML = 'Country is required for shipped orders';
   } else {
     const totalItems = orderLines.reduce((sum, l) => sum + l.quantity, 0);
     const typeLabel  = orderType === 'ship' ? 'Ship' : 'Personal delivery';
