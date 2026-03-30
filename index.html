@@ -215,7 +215,11 @@ textarea { resize: vertical; min-height: 72px; }
       <div class="panel-title">New contact</div>
       <div class="field">
         <label>Name *</label>
-        <input type="text" id="nc-name" placeholder="Artist or contact name">
+        <input type="text" id="nc-name" placeholder="Artist or stage name">
+      </div>
+      <div class="field">
+        <label>Mailbox Name <span style="color:var(--muted);font-size:9px;letter-spacing:0">(name on the parcel label — if different)</span></label>
+        <input type="text" id="nc-mailbox-name" placeholder="e.g. Real name if different from artist name">
       </div>
       <div class="field-row col2">
         <div class="field">
@@ -495,7 +499,9 @@ function selectContact(contact) {
   document.getElementById('contactCardName').textContent = contact.display_name;
   document.getElementById('contactCardType').textContent = contact.contact_type || 'Contact';
   const parts = [contact.email, contact.phone, contact.add1, contact.city, contact.country].filter(Boolean);
-  document.getElementById('contactCardDetail').textContent = parts.join(' · ');
+  const mailboxNote = contact.mailbox_name && contact.mailbox_name !== contact.display_name
+    ? ' · Mailbox: ' + contact.mailbox_name : '';
+  document.getElementById('contactCardDetail').textContent = parts.join(' · ') + mailboxNote;
 
   // Auto-fill shipping address
   document.getElementById('addr-add1').value     = contact.add1     || '';
@@ -536,6 +542,7 @@ async function saveNewContact() {
   btn.disabled = true;
   const payload = {
     name,
+    mailbox_name: document.getElementById('nc-mailbox-name').value.trim() || name,
     email:        document.getElementById('nc-email').value.trim(),
     phone:        document.getElementById('nc-phone').value.trim(),
     contact_type: document.getElementById('nc-type').value,
@@ -552,7 +559,7 @@ async function saveNewContact() {
     if (data.error) { alert('Error: ' + data.error); return; }
     selectContact(data.contact);
     toggleAddContact();
-    ['nc-name','nc-email','nc-phone','nc-add1','nc-add2','nc-add3','nc-city','nc-postcode','nc-country']
+    ['nc-name','nc-mailbox-name','nc-email','nc-phone','nc-add1','nc-add2','nc-add3','nc-city','nc-postcode','nc-country']
       .forEach(id => document.getElementById(id).value = '');
     document.getElementById('nc-type').value = 'Artist';
   } catch (err) {
