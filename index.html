@@ -149,6 +149,21 @@ textarea { resize: vertical; min-height: 72px; }
 .spinner.visible { display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.dropdown-item.unavailable {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.dropdown-item.unavailable:hover { background: transparent; }
+.dropdown-unavailable-tag {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-left: auto;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
 /* ── Scrollbar ─────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -433,12 +448,24 @@ async function searchProducts(q) {
     setStatus('ready');
     if (data.error) { dd.innerHTML = `<div class="dropdown-empty">Error: ${data.error}</div>`; return; }
     if (!data.results.length) { dd.innerHTML = '<div class="dropdown-empty">No products found</div>'; return; }
-    dd.innerHTML = data.results.map(p => `
-      <div class="dropdown-item" onclick="addLine(${JSON.stringify(p).replace(/"/g, '&quot;')})">
-        <span class="dropdown-sku">${p.sku}</span>
-        <span class="dropdown-name">${p.name}</span>
-        <span class="dropdown-price">${p.regular_price ? '€' + p.regular_price.toFixed(2) : 'free'}</span>
-      </div>`).join('');
+    dd.innerHTML = data.results.map(p => {
+      const isPromo = p.sales_channels && p.sales_channels.includes('Promo');
+      if (isPromo) {
+        return `
+          <div class="dropdown-item" onclick="addLine(${JSON.stringify(p).replace(/"/g, '&quot;')})">
+            <span class="dropdown-sku">${p.sku}</span>
+            <span class="dropdown-name">${p.name}</span>
+            <span class="dropdown-price">${p.regular_price ? '€' + p.regular_price.toFixed(2) : 'free'}</span>
+          </div>`;
+      } else {
+        return `
+          <div class="dropdown-item unavailable" title="Not available for promo orders">
+            <span class="dropdown-sku">${p.sku}</span>
+            <span class="dropdown-name">${p.name}</span>
+            <span class="dropdown-unavailable-tag">Not for promo</span>
+          </div>`;
+      }
+    }).join('');
   } catch (err) {
     setStatus('error');
     dd.innerHTML = '<div class="dropdown-empty">Connection error</div>';
