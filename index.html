@@ -653,6 +653,20 @@ textarea { resize: vertical; min-height: 72px; }
 </div>
 
 <script>
+// ── Helpers ───────────────────────────────────────────────────────────────────
+// Escape HTML special characters before inserting API data into innerHTML.
+// Applied to all Airtable data (product names, SKUs, contact names etc.)
+// to prevent XSS if any field contains HTML tags.
+function esc(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── Config ────────────────────────────────────────────────────────────────────
 const BASE_URL = 'https://seven.berlin/promo';
 const ENDPOINTS = {
@@ -747,7 +761,7 @@ async function searchProducts(q) {
     setStatus('ready');
 
     if (data.error) {
-      dd.innerHTML = `<div class="dropdown-empty">Error: ${data.error}</div>`;
+      dd.innerHTML = `<div class="dropdown-empty">Error: ${esc(data.error)}</div>`;
       return;
     }
 
@@ -758,8 +772,8 @@ async function searchProducts(q) {
 
     dd.innerHTML = data.results.map(p => `
       <div class="dropdown-item" onclick="addLine(${JSON.stringify(p).replace(/"/g, '&quot;')})">
-        <span class="dropdown-sku">${p.sku}</span>
-        <span class="dropdown-name">${p.name}</span>
+        <span class="dropdown-sku">${esc(p.sku)}</span>
+        <span class="dropdown-name">${esc(p.name)}</span>
         <span class="dropdown-price">${p.regular_price ? '€' + p.regular_price.toFixed(2) : 'free'}</span>
       </div>
     `).join('');
@@ -802,8 +816,8 @@ function renderLines() {
   list.innerHTML = orderLines.map((line, i) => `
     <div class="line-item">
       <div>
-        <div class="line-sku">${line.sku}</div>
-        <div class="line-name">${line.name}</div>
+        <div class="line-sku">${esc(line.sku)}</div>
+        <div class="line-name">${esc(line.name)}</div>
       </div>
       <div class="line-price">${line.regular_price ? '€' + line.regular_price.toFixed(2) : 'free'}</div>
       <div class="line-qty-wrap">
@@ -844,9 +858,9 @@ async function searchContacts(q) {
 
     dd.innerHTML = data.results.map(c => `
       <div class="dropdown-item" onclick="selectContact(${JSON.stringify(c).replace(/"/g, '&quot;')})">
-        <span class="dropdown-sku">${c.contact_type || 'Contact'}</span>
-        <span class="dropdown-name">${c.display_name}</span>
-        <span class="dropdown-price" style="font-size:11px;color:var(--muted)">${c.city || ''}</span>
+        <span class="dropdown-sku">${esc(c.contact_type || 'Contact')}</span>
+        <span class="dropdown-name">${esc(c.display_name)}</span>
+        <span class="dropdown-price" style="font-size:11px;color:var(--muted)">${esc(c.city || '')}</span>
       </div>
     `).join('');
   } catch (err) {
@@ -977,7 +991,7 @@ function updateSubmitState() {
     const contactName = orderType === 'personal'
       ? document.getElementById('personalName').value.trim()
       : selectedContact.display_name;
-    summary.innerHTML = `<strong>${typeLabel}</strong> · ${contactName} · ${totalItems} item${totalItems !== 1 ? 's' : ''}`;
+    summary.innerHTML = `<strong>${esc(typeLabel)}</strong> · ${esc(contactName)} · ${totalItems} item${totalItems !== 1 ? 's' : ''}`;
   }
 
   // Listen for personal name changes
