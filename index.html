@@ -358,6 +358,44 @@ textarea { resize: vertical; min-height: 72px; }
 .address-section { display: block; }
 .address-section.hidden { display: none; }
 
+/* ── Address changed banner ────────────────────────────────────────────────── */
+.addr-changed-banner {
+  display: none;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(240,168,64,0.08);
+  border: 1px solid rgba(240,168,64,0.3);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  font-size: 12px;
+  color: var(--warn);
+  line-height: 1.5;
+}
+.addr-changed-banner.visible { display: flex; }
+.addr-changed-banner svg { flex-shrink: 0; margin-top: 1px; }
+.addr-changed-text { flex: 1; }
+.addr-changed-text strong { display: block; margin-bottom: 6px; font-weight: 500; font-size: 12px; }
+.addr-update-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  cursor: pointer;
+}
+.addr-update-check input[type=checkbox] {
+  width: 14px; height: 14px;
+  accent-color: var(--warn);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.addr-update-check span {
+  font-size: 11px;
+  color: var(--warn);
+  font-family: var(--mono);
+  cursor: pointer;
+}
+
 /* ── Buttons ───────────────────────────────────────────────────────────────── */
 .btn {
   padding: 9px 18px;
@@ -580,36 +618,53 @@ textarea { resize: vertical; min-height: 72px; }
   <!-- ③ Shipping address (hidden for personal delivery) -->
   <div class="section address-section" id="addressSection">
     <div class="section-label">Shipping address</div>
+
+    <!-- Address-changed warning banner -->
+    <div class="addr-changed-banner" id="addrChangedBanner">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M7 1.5L12.5 11.5H1.5L7 1.5Z" stroke="#f0a840" stroke-width="1.2" stroke-linejoin="round"/>
+        <path d="M7 5.5V8" stroke="#f0a840" stroke-width="1.2" stroke-linecap="round"/>
+        <circle cx="7" cy="10" r="0.6" fill="#f0a840"/>
+      </svg>
+      <div class="addr-changed-text">
+        <strong>Address differs from contact record</strong>
+        This order will ship to the address below. The contact record has not been changed.
+        <label class="addr-update-check">
+          <input type="checkbox" id="updateContactAddr">
+          <span>Also update this contact's saved address</span>
+        </label>
+      </div>
+    </div>
     <div class="field">
       <label>Address line 1</label>
-      <input type="text" id="addr-add1" placeholder="Street and number">
+      <input type="text" id="addr-add1" placeholder="Street and number" oninput="checkAddrChanged()">
     </div>
     <div class="field">
       <label>Address line 2</label>
-      <input type="text" id="addr-add2" placeholder="Apartment, floor, etc.">
+      <input type="text" id="addr-add2" placeholder="Apartment, floor, etc." oninput="checkAddrChanged()">
     </div>
     <div class="field-row col3">
       <div class="field">
         <label>City</label>
-        <input type="text" id="addr-city">
+        <input type="text" id="addr-city" oninput="checkAddrChanged()">
       </div>
       <div class="field">
         <label>Postcode</label>
-        <input type="text" id="addr-postcode">
+        <input type="text" id="addr-postcode" oninput="checkAddrChanged()">
       </div>
       <div class="field">
         <label>Country <span style="color:var(--accent)">*</span></label>
-        <input type="text" id="addr-country" placeholder="e.g. Germany, France, USA…" oninput="updateSubmitState()">
+        <input type="text" id="addr-country" placeholder="e.g. Germany, France, USA…" oninput="checkAddrChanged(); updateSubmitState()">
       </div>
     </div>
     <div class="field-row col2">
       <div class="field">
         <label>Region / State</label>
-        <input type="text" id="addr-region">
+        <input type="text" id="addr-region" oninput="checkAddrChanged()">
       </div>
       <div class="field">
         <label>Phone</label>
-        <input type="text" id="addr-phone">
+        <input type="text" id="addr-phone" oninput="checkAddrChanged()">
       </div>
     </div>
   </div>
@@ -898,12 +953,40 @@ function clearContact(silent = false) {
   selectedContact = null;
   document.getElementById('contactCard').classList.remove('visible');
   document.getElementById('contactSearch').value = '';
+  document.getElementById('addrChangedBanner').classList.remove('visible');
+  document.getElementById('updateContactAddr').checked = false;
   if (!silent) {
     // Clear address fields too
     ['addr-add1','addr-add2','addr-city','addr-postcode','addr-country','addr-region','addr-phone']
       .forEach(id => document.getElementById(id).value = '');
   }
   updateSubmitState();
+}
+
+// ── Address change detection ──────────────────────────────────────────────────
+// Compares current form values against what was loaded from the contact record.
+// Shows the warning banner if anything differs.
+function checkAddrChanged() {
+  if (!selectedContact) return;
+
+  const fields = [
+    ['addr-add1',    selectedContact.add1     || ''],
+    ['addr-add2',    selectedContact.add2     || ''],
+    ['addr-city',    selectedContact.city     || ''],
+    ['addr-postcode',selectedContact.postcode || ''],
+    ['addr-country', selectedContact.country  || ''],
+    ['addr-region',  selectedContact.region   || ''],
+    ['addr-phone',   selectedContact.phone    || ''],
+  ];
+
+  const changed = fields.some(([id, original]) =>
+    document.getElementById(id).value.trim() !== original.trim()
+  );
+
+  document.getElementById('addrChangedBanner').classList.toggle('visible', changed);
+  if (!changed) {
+    document.getElementById('updateContactAddr').checked = false;
+  }
 }
 
 // ── Add contact panel ─────────────────────────────────────────────────────────
@@ -1022,6 +1105,19 @@ async function submitOrder() {
     payload.contact_name = document.getElementById('personalName').value.trim();
   } else {
     payload.contact_id = selectedContact.id;
+    payload.address = {
+      add1:     document.getElementById('addr-add1').value.trim(),
+      add2:     document.getElementById('addr-add2').value.trim(),
+      city:     document.getElementById('addr-city').value.trim(),
+      postcode: document.getElementById('addr-postcode').value.trim(),
+      country:  document.getElementById('addr-country').value.trim(),
+      region:   document.getElementById('addr-region').value.trim(),
+      phone:    document.getElementById('addr-phone').value.trim(),
+    };
+    // If the user ticked "update contact record", send the flag
+    if (document.getElementById('updateContactAddr').checked) {
+      payload.update_contact_address = true;
+    }
   }
 
   try {
@@ -1074,6 +1170,8 @@ function resetForm() {
   document.getElementById('personalName').value  = '';
   document.getElementById('orderNotes').value    = '';
   document.getElementById('productSearch').value = '';
+  document.getElementById('addrChangedBanner').classList.remove('visible');
+  document.getElementById('updateContactAddr').checked = false;
 
   ['addr-add1','addr-add2','addr-city','addr-postcode','addr-country','addr-region','addr-phone']
     .forEach(id => document.getElementById(id).value = '');
