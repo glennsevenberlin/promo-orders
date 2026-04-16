@@ -354,6 +354,39 @@ textarea { resize: vertical; min-height: 72px; }
 }
 .lines-empty.visible { display: block; }
 
+/* ── Cost price warning on line items ─────────────────────────────────────── */
+.line-item.customs-warn {
+  border-color: var(--danger);
+  background: rgba(240,96,96,0.06);
+}
+.line-customs-warn {
+  grid-column: 1 / -1;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--danger);
+  line-height: 1.5;
+  padding-top: 4px;
+}
+
+/* ── Customs warning banner ───────────────────────────────────────────────── */
+.customs-warn-banner {
+  display: none;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(240,96,96,0.08);
+  border: 1px solid rgba(240,96,96,0.3);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--danger);
+  line-height: 1.5;
+}
+.customs-warn-banner.visible { display: flex; }
+.customs-warn-banner svg { flex-shrink: 0; margin-top: 1px; }
+.customs-warn-banner-text { flex: 1; }
+.customs-warn-banner-text strong { display: block; margin-bottom: 4px; font-weight: 500; font-size: 12px; }
+
 /* ── Address section ───────────────────────────────────────────────────────── */
 .address-section { display: block; }
 .address-section.hidden { display: none; }
@@ -654,7 +687,7 @@ textarea { resize: vertical; min-height: 72px; }
       </div>
       <div class="field">
         <label>Country <span style="color:var(--accent)">*</span></label>
-        <input type="text" id="addr-country" placeholder="e.g. Germany, France, USA…" oninput="checkAddrChanged(); updateSubmitState()">
+        <input type="text" id="addr-country" placeholder="e.g. Germany, France, USA…" oninput="checkAddrChanged(); renderLines(); updateSubmitState()">
       </div>
     </div>
     <div class="field-row col2">
@@ -680,6 +713,17 @@ textarea { resize: vertical; min-height: 72px; }
     </div>
 
     <div id="linesList" class="lines-list"></div>
+    <div id="customsWarnBanner" class="customs-warn-banner">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M7 1.5L12.5 11.5H1.5L7 1.5Z" stroke="#f06060" stroke-width="1.2" stroke-linejoin="round"/>
+        <path d="M7 5.5V8" stroke="#f06060" stroke-width="1.2" stroke-linecap="round"/>
+        <circle cx="7" cy="10" r="0.6" fill="#f06060"/>
+      </svg>
+      <div class="customs-warn-banner-text">
+        <strong>Customs cost price missing</strong>
+        Items marked in red have a cost price of zero or blank. Non-EU shipments require CN23 customs forms with a valid cost price. Please fix the cost price in Airtable before including these items.
+      </div>
+    </div>
     <div id="linesEmpty" class="lines-empty visible">No products added yet</div>
   </div>
 
@@ -738,6 +782,35 @@ let orderType       = 'ship'; // 'ship' | 'personal'
 let productSearchTimer  = null;
 let contactSearchTimer  = null;
 let addContactOpen  = false;
+
+// ── EU countries (by common name, lowercase for matching) ────────────────────
+// Used for CN23 customs validation — non-EU destinations require valid cost price
+const EU_COUNTRIES = new Set([
+  'austria', 'belgium', 'bulgaria', 'croatia', 'cyprus', 'czech republic',
+  'czechia', 'denmark', 'estonia', 'finland', 'france', 'germany', 'greece',
+  'hungary', 'ireland', 'italy', 'latvia', 'lithuania', 'luxembourg', 'malta',
+  'netherlands', 'holland', 'poland', 'portugal', 'romania', 'slovakia',
+  'slovenia', 'spain', 'sweden',
+  // Include Germany variations since we're based here
+  'deutschland',
+]);
+
+function isNonEU() {
+  if (orderType === 'personal') return false;
+  const country = document.getElementById('addr-country').value.trim().toLowerCase();
+  if (!country) return false; // No country yet — don't flag
+  return !EU_COUNTRIES.has(country);
+}
+
+function hasCustomsCostIssue(line) {
+  // Cost price is zero, null, undefined, or missing
+  return !line.cost_price || parseFloat(line.cost_price) === 0;
+}
+
+function getCustomsBlockedLines() {
+  if (!isNonEU()) return [];
+  return orderLines.filter(l => hasCustomsCostIssue(l));
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -800,6 +873,7 @@ function setType(type) {
     personalName.style.display = 'none';
   }
 
+  renderLines();
   updateSubmitState();
 }
 
@@ -825,13 +899,15 @@ async function searchProducts(q) {
       return;
     }
 
-    dd.innerHTML = data.results.map(p => `
-      <div class="dropdown-item" onclick="addLine(${JSON.stringify(p).replace(/"/g, '&quot;')})">
+    dd.innerHTML = data.results.map(p => {
+      const costMissing = isNonEU() && hasCustomsCostIssue(p);
+      return `
+      <div class="dropdown-item${costMissing ? ' customs-warn' : ''}" onclick="addLine(${JSON.stringify(p).replace(/"/g, '&quot;')})">
         <span class="dropdown-sku">${esc(p.sku)}</span>
-        <span class="dropdown-name">${esc(p.name)}</span>
+        <span class="dropdown-name">${esc(p.name)}${costMissing ? ' <span style="color:var(--danger);font-size:10px;font-family:var(--mono)">⚠ NO COST PRICE</span>' : ''}</span>
         <span class="dropdown-price">${p.regular_price ? '€' + p.regular_price.toFixed(2) : 'free'}</span>
       </div>
-    `).join('');
+    `}).join('');
   } catch (err) {
     setStatus('error');
     dd.innerHTML = '<div class="dropdown-empty">Connection error</div>';
@@ -844,6 +920,14 @@ function closeDropdown(id) {
 
 // ── Add line ──────────────────────────────────────────────────────────────────
 function addLine(product) {
+  // Block items with zero/missing cost price for non-EU shipments (CN23 requirement)
+  if (isNonEU() && hasCustomsCostIssue(product)) {
+    alert("You can't ship this item outside the EU as the cost price of zero is invalid for customs. Please fix that in Airtable first.");
+    closeDropdown('productDropdown');
+    document.getElementById('productSearch').value = '';
+    return;
+  }
+
   // Check if already added — just increment qty instead
   const existing = orderLines.find(l => l.id === product.id);
   if (existing) {
@@ -865,11 +949,18 @@ function addLine(product) {
 function renderLines() {
   const list  = document.getElementById('linesList');
   const empty = document.getElementById('linesEmpty');
+  const nonEU = isNonEU();
+  const blockedLines = getCustomsBlockedLines();
 
   empty.classList.toggle('visible', orderLines.length === 0);
 
-  list.innerHTML = orderLines.map((line, i) => `
-    <div class="line-item">
+  // Show/hide customs warning banner
+  document.getElementById('customsWarnBanner').classList.toggle('visible', blockedLines.length > 0);
+
+  list.innerHTML = orderLines.map((line, i) => {
+    const blocked = nonEU && hasCustomsCostIssue(line);
+    return `
+    <div class="line-item${blocked ? ' customs-warn' : ''}">
       <div>
         <div class="line-sku">${esc(line.sku)}</div>
         <div class="line-name">${esc(line.name)}</div>
@@ -880,8 +971,9 @@ function renderLines() {
           oninput="updateQty(${i}, this.value)" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);">
       </div>
       <button class="line-remove" onclick="removeLine(${i})" title="Remove">×</button>
+      ${blocked ? '<div class="line-customs-warn">⚠ Cost price is zero — invalid for non-EU customs (CN23)</div>' : ''}
     </div>
-  `).join('');
+  `}).join('');
 }
 
 function updateQty(index, value) {
@@ -1056,7 +1148,12 @@ function updateSubmitState() {
   const hasLines   = orderLines.length > 0;
   const hasCountry = orderType === 'personal'
     || document.getElementById('addr-country').value.trim().length > 0;
-  const ready = hasContact && hasLines && hasCountry;
+
+  // Check for customs cost price issues (non-EU + zero cost price)
+  const blockedLines = getCustomsBlockedLines();
+  const hasCustomsBlock = blockedLines.length > 0;
+
+  const ready = hasContact && hasLines && hasCountry && !hasCustomsBlock;
 
   btn.disabled = !ready;
 
@@ -1068,6 +1165,8 @@ function updateSubmitState() {
     summary.innerHTML = 'Add at least one product';
   } else if (!hasCountry) {
     summary.innerHTML = 'Country is required for shipped orders';
+  } else if (hasCustomsBlock) {
+    summary.innerHTML = `<span style="color:var(--danger)">${blockedLines.length} item${blockedLines.length !== 1 ? 's have' : ' has'} zero cost price — fix before shipping outside EU</span>`;
   } else {
     const totalItems = orderLines.reduce((sum, l) => sum + l.quantity, 0);
     const typeLabel  = orderType === 'ship' ? 'Ship' : 'Personal delivery';
@@ -1172,6 +1271,7 @@ function resetForm() {
   document.getElementById('productSearch').value = '';
   document.getElementById('addrChangedBanner').classList.remove('visible');
   document.getElementById('updateContactAddr').checked = false;
+  document.getElementById('customsWarnBanner').classList.remove('visible');
 
   ['addr-add1','addr-add2','addr-city','addr-postcode','addr-country','addr-region','addr-phone']
     .forEach(id => document.getElementById(id).value = '');
